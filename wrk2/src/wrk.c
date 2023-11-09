@@ -7,6 +7,7 @@
 #include "hdr_histogram.h"
 #include "stats.h"
 #include "assert.h"
+#include <inttypes.h>
 
 // Max recordable latency of 1 day
 #define MAX_LATENCY 24L * 60 * 60 * 1000000
@@ -56,6 +57,32 @@ static volatile sig_atomic_t stop = 0;
 static void handler(int sig) {
     stop = 1;
 }
+
+FILE *statsFile = NULL;
+pthread_mutex_t fileMutex = PTHREAD_MUTEX_INITIALIZER;
+
+void initStatsFile() {
+    pthread_mutex_lock(&fileMutex);
+    if (statsFile == NULL) {
+        statsFile = fopen("throughput.log", "w");
+        if (statsFile == NULL) {
+            perror("Error opening file");
+            exit(1);
+        }
+        fprintf(statsFile, "Time(ms), Requests, ThreadID\n");
+    }
+    pthread_mutex_unlock(&fileMutex);
+}
+
+void closeStatsFile() {
+    pthread_mutex_lock(&fileMutex);
+    if (statsFile != NULL) {
+        fclose(statsFile);
+        statsFile = NULL;
+    }
+    pthread_mutex_unlock(&fileMutex);
+}
+
 
 static void usage() {
     printf("Usage: wrk <options> <url>                                       \n"
@@ -167,6 +194,7 @@ int main(int argc, char **argv) {
         }
 
         uint64_t stop_at = time_us() + (cfg.duration * 1000000); // check timeout
+        initStatsFile();
 
         for (uint64_t id_thread = 0; id_thread < cfg.threads; id_thread++) {
             uint64_t i = id_url * cfg.threads + id_thread;
@@ -207,6 +235,8 @@ int main(int argc, char **argv) {
                 cfg.threads, cfg.connections);
 
         start_urls[id_url] = time_us();
+
+        closeStatsFile();
 
     }
     
@@ -543,6 +573,7 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
     return TIMEOUT_INTERVAL_MS; // call check_timeouts after 2s
 }
 
+// Melissa's Note: just dump the statistics output here to get the rate
 static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     thread *thread = data;
 
@@ -553,7 +584,19 @@ static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     uint64_t id_url = thread->tid / cfg.threads; 
     pthread_mutex_lock(&statistics.mutex);
     stats_record(statistics.requests[id_url], requests);
+    // printf("sample_rate: %lld \n", requests);
     pthread_mutex_unlock(&statistics.mutex);
+
+    pthread_mutex_lock(&fileMutex);
+    fprintf(stderr, "Debug: Elapsed: %" PRIu64 ", Requests: %" PRIu64 ", ThreadID: %" PRIu64 "\n", elapsed_ms, requests, id_url);
+    if (statsFile != NULL) {
+        // fprintf(statsFile, "%llu, %llu, %llu\n", elapsed_ms, requests, id_url);
+        fprintf(statsFile, "%" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n", elapsed_ms, requests, id_url);
+        fflush(statsFile);
+    } else {
+        fprintf(stderr, "Debug: statsFile is null");
+    }
+    pthread_mutex_unlock(&fileMutex);
 
     thread->requests = 0;
     thread->start    = time_us();
