@@ -153,11 +153,6 @@ int main(int argc, char **argv) {
     /*statitical variables*/
 
     initStatsFile();
-    if (statsFile == NULL) {
-        fprintf(stderr, "Debug: statsFile is null line 157\n");
-    } else {
-        fprintf(stderr, "Debug: statsFile is good at line 157, statsFile: %p\n", (void *)statsFile);
-    }
 
     char **purls = urls;
 
@@ -235,12 +230,6 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "unable to create thread %"PRIu64" for %s: %s\n", id_thread, url, msg);
                 exit(2);
             }
-        }
-
-        if (statsFile == NULL) {
-            fprintf(stderr, "Debug: statsFile is null line 240\n");
-        } else {
-            fprintf(stderr, "Debug: statsFile is good at line 240, statsFile: %p\n", (void *)statsFile);
         }
 
         printf("Running %s test @ %s\n", time, url);
@@ -559,6 +548,7 @@ static int calibrate(aeEventLoop *loop, long long id, void *data) {
             (thread->mean)/1000.0,
             thread->interval);
 
+    aeCreateTimeEvent(loop, 1000, sample_rate_second, thread, NULL);
     aeCreateTimeEvent(loop, thread->interval, sample_rate, thread, NULL);
 
     return AE_NOMORE;
@@ -595,24 +585,35 @@ static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     uint64_t id_url = thread->tid / cfg.threads; 
     pthread_mutex_lock(&statistics.mutex);
     stats_record(statistics.requests[id_url], requests);
-    // printf("sample_rate: %lld \n", requests);
-    printf("sample_rate called, statsFile: %p\n", (void *)statsFile);
     pthread_mutex_unlock(&statistics.mutex);
 
+    thread->requests = 0;
+    thread->start    = time_us();
+    return thread->interval; // call sample_rate again after thread->interval
+}
+
+// Melissa's Note: just dump the statistics output here to get the rate
+static int sample_rate_second(aeEventLoop *loop, long long id, void *data) {
+    thread *thread = data;
+
+    uint64_t now = time_us();
+    uint64_t elapsed_ms = (now - thread->start) / 1000;
+    // requests here indicates: real-time throughput of thread. (req/sec/thread)
+    uint64_t requests = (thread->requests / (double) elapsed_ms) * 1000;
+    uint64_t id_url = thread->tid / cfg.threads; 
+
     pthread_mutex_lock(&fileMutex);
-    fprintf(stderr, "Debug: Elapsed: %" PRIu64 ", Requests: %" PRIu64 ", ThreadID: %" PRIu64 "\n", elapsed_ms, requests, id_url);
+    fprintf(stderr, "Debug: Elapsed: %" PRIu64 ", Now: %" PRIu64 ", Requests: %" PRIu64 ", ThreadID: %" PRIu64 "\n", elapsed_ms, now, requests, id_url);
     if (statsFile != NULL) {
         // fprintf(statsFile, "%llu, %llu, %llu\n", elapsed_ms, requests, id_url);
-        fprintf(statsFile, "%" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n", elapsed_ms, requests, id_url);
+        fprintf(statsFile, "%" PRIu64 ", %" PRIu64 "\n", now, requests);
         fflush(statsFile);
     } else {
         fprintf(stderr, "Debug: statsFile is null");
     }
     pthread_mutex_unlock(&fileMutex);
 
-    thread->requests = 0;
-    thread->start    = time_us();
-    return thread->interval; // call sample_rate again after thread->interval
+    return 1000; // call sample_rate again after thread->interval
 }
 
 static int header_field(http_parser *parser, const char *at, size_t len) {
