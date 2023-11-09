@@ -58,7 +58,7 @@ static void handler(int sig) {
     stop = 1;
 }
 
-FILE *statsFile = NULL;
+FILE *statsFile = NULL; // Global declaration
 pthread_mutex_t fileMutex = PTHREAD_MUTEX_INITIALIZER;
 
 void initStatsFile() {
@@ -67,7 +67,7 @@ void initStatsFile() {
         statsFile = fopen("throughput.log", "w");
         if (statsFile == NULL) {
             perror("Error opening file");
-            exit(1);
+            exit(EXIT_FAILURE); // Exit if cannot open the file
         }
         fprintf(statsFile, "Time(ms), Requests, ThreadID\n");
     }
@@ -152,6 +152,13 @@ int main(int argc, char **argv) {
     uint64_t start_urls[cfg.num_urls];
     /*statitical variables*/
 
+    initStatsFile();
+    if (statsFile == NULL) {
+        fprintf(stderr, "Debug: statsFile is null line 157\n");
+    } else {
+        fprintf(stderr, "Debug: statsFile is good at line 157, statsFile: %p\n", (void *)statsFile);
+    }
+
     char **purls = urls;
 
     for(int id_url=0; id_url< cfg.num_urls; id_url++ ){
@@ -194,7 +201,6 @@ int main(int argc, char **argv) {
         }
 
         uint64_t stop_at = time_us() + (cfg.duration * 1000000); // check timeout
-        initStatsFile();
 
         for (uint64_t id_thread = 0; id_thread < cfg.threads; id_thread++) {
             uint64_t i = id_url * cfg.threads + id_thread;
@@ -230,14 +236,18 @@ int main(int argc, char **argv) {
                 exit(2);
             }
         }
+
+        if (statsFile == NULL) {
+            fprintf(stderr, "Debug: statsFile is null line 240\n");
+        } else {
+            fprintf(stderr, "Debug: statsFile is good at line 240, statsFile: %p\n", (void *)statsFile);
+        }
+
         printf("Running %s test @ %s\n", time, url);
         printf("  %"PRIu64" threads and %"PRIu64" connections\n\n",
                 cfg.threads, cfg.connections);
 
         start_urls[id_url] = time_us();
-
-        closeStatsFile();
-
     }
     
     struct sigaction sa = {
@@ -408,6 +418,7 @@ int main(int argc, char **argv) {
         printf("Requests/sec: %9.2Lf\n", total_req_per_s);
         printf("Transfer/sec: %10sB\n", format_binary(total_bytes_per_s));
     }
+    closeStatsFile();
     return 0;
 }
 
@@ -585,6 +596,7 @@ static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     pthread_mutex_lock(&statistics.mutex);
     stats_record(statistics.requests[id_url], requests);
     // printf("sample_rate: %lld \n", requests);
+    printf("sample_rate called, statsFile: %p\n", (void *)statsFile);
     pthread_mutex_unlock(&statistics.mutex);
 
     pthread_mutex_lock(&fileMutex);
