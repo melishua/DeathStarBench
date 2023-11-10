@@ -548,7 +548,7 @@ static int calibrate(aeEventLoop *loop, long long id, void *data) {
             (thread->mean)/1000.0,
             thread->interval);
 
-    aeCreateTimeEvent(loop, 1000, sample_rate_second, thread, NULL);
+    // aeCreateTimeEvent(loop, 1000, sample_rate_second, thread, NULL);
     aeCreateTimeEvent(loop, thread->interval, sample_rate, thread, NULL);
 
     return AE_NOMORE;
@@ -586,6 +586,17 @@ static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     pthread_mutex_lock(&statistics.mutex);
     stats_record(statistics.requests[id_url], requests);
     pthread_mutex_unlock(&statistics.mutex);
+
+    pthread_mutex_lock(&fileMutex);
+    fprintf(stderr, "Debug: Elapsed: %" PRIu64 ", Requests: %" PRIu64 ", ThreadID: %" PRIu64 "\n", elapsed_ms, requests, thread->tid);
+    if (statsFile != NULL) {
+        // fprintf(statsFile, "%llu, %llu, %llu\n", elapsed_ms, requests, id_url);
+        fprintf(statsFile, "%" PRIu64 ", %" PRIu64 "\n", elapsed_ms, requests);
+        fflush(statsFile);
+    } else {
+        fprintf(stderr, "Debug: statsFile is null");
+    }
+    pthread_mutex_unlock(&fileMutex);
 
     thread->requests = 0;
     thread->start    = time_us();
