@@ -574,7 +574,6 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
     return TIMEOUT_INTERVAL_MS; // call check_timeouts after 2s
 }
 
-// Melissa's Note: just dump the statistics output here to get the rate
 static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     thread *thread = data;
 
@@ -588,7 +587,7 @@ static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     pthread_mutex_unlock(&statistics.mutex);
 
     pthread_mutex_lock(&fileMutex);
-    fprintf(stderr, "Debug: Elapsed: %" PRIu64 ", Requests: %" PRIu64 ", ThreadID: %" PRIu64 "\n", elapsed_ms, requests, thread->tid);
+    // fprintf(stderr, "Debug: Elapsed: %" PRIu64 ", Requests: %" PRIu64 ", ThreadID: %" PRIu64 "\n", elapsed_ms, requests, thread->tid);
     if (statsFile != NULL) {
         // fprintf(statsFile, "%llu, %llu, %llu\n", elapsed_ms, requests, id_url);
         fprintf(statsFile, "%" PRIu64 ", %" PRIu64 "\n", elapsed_ms, requests);
@@ -601,30 +600,6 @@ static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     thread->requests = 0;
     thread->start    = time_us();
     return thread->interval; // call sample_rate again after thread->interval
-}
-
-// Melissa's Note: just dump the statistics output here to get the rate
-static int sample_rate_second(aeEventLoop *loop, long long id, void *data) {
-    thread *thread = data;
-
-    uint64_t now = time_us();
-    uint64_t elapsed_ms = (now - thread->start) / 1000;
-    // requests here indicates: real-time throughput of thread. (req/sec/thread)
-    uint64_t requests = (thread->requests / (double) elapsed_ms) * 1000;
-    uint64_t id_url = thread->tid / cfg.threads; 
-
-    pthread_mutex_lock(&fileMutex);
-    fprintf(stderr, "Debug: Elapsed: %" PRIu64 ", Now: %" PRIu64 ", Requests: %" PRIu64 ", ThreadID: %" PRIu64 "\n", elapsed_ms, now, requests, id_url);
-    if (statsFile != NULL) {
-        // fprintf(statsFile, "%llu, %llu, %llu\n", elapsed_ms, requests, id_url);
-        fprintf(statsFile, "%" PRIu64 ", %" PRIu64 "\n", now, requests);
-        fflush(statsFile);
-    } else {
-        fprintf(stderr, "Debug: statsFile is null");
-    }
-    pthread_mutex_unlock(&fileMutex);
-
-    return 1000; // call sample_rate again after thread->interval
 }
 
 static int header_field(http_parser *parser, const char *at, size_t len) {
