@@ -69,7 +69,7 @@ void initStatsFile() {
             perror("Error opening file");
             exit(EXIT_FAILURE); // Exit if cannot open the file
         }
-        fprintf(statsFile, "Time(ms), Requests, ThreadID\n");
+        fprintf(statsFile, "Time(ms),Requests\n");
     }
     pthread_mutex_unlock(&fileMutex);
 }
@@ -590,10 +590,8 @@ static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     // fprintf(stderr, "Debug: Elapsed: %" PRIu64 ", Requests: %" PRIu64 ", ThreadID: %" PRIu64 "\n", elapsed_ms, requests, thread->tid);
     if (statsFile != NULL) {
         // fprintf(statsFile, "%llu, %llu, %llu\n", elapsed_ms, requests, id_url);
-        fprintf(statsFile, "%" PRIu64 ", %" PRIu64 "\n", elapsed_ms, requests);
+        fprintf(statsFile, "%" PRIu64 ",%" PRIu64 "\n", elapsed_ms, requests);
         fflush(statsFile);
-    } else {
-        fprintf(stderr, "Debug: statsFile is null");
     }
     pthread_mutex_unlock(&fileMutex);
 
